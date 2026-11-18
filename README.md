@@ -42,7 +42,7 @@ npm install @monoiar/beepblips
 `package.json` already maps the root export, so the import name is the package name:
 
 ```js
-import {speak} from 'beepblips';
+import {speak} from '@monoiar/beepblips';
 ```
 
 ### Option 3: browser, no build step

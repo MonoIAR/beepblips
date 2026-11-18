@@ -1,3 +1,5 @@
 node_modules/
 *.wav
+*.tgz
+_site/
 .DS_Store

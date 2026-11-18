@@ -2,6 +2,18 @@
   "name": "@monoiar/beepblips",
   "version": "0.1.0",
   "description": "Bleep synthesizer in one file.",
+  "author": "MIAR STAFF",
+  "homepage": "https://monoiar.github.io/beepblips/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MonoIAR/beepblips.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MonoIAR/beepblips/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./beepblips.js",
   "exports": {

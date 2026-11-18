@@ -1374,20 +1374,20 @@
 <footer class="footer">
   <div class="footer-inner">
     <span>beepblips v0.1.0</span>
-    <span>MIT license / <a href="README.md">README</a></span>
+    <span>MIT license / <a href="https://github.com/MonoIAR/beepblips#readme">README</a></span>
   </div>
 </footer>
 
 <script type="module">
 /* beepblips:begin */
-// beepblips —— 把任意文本变成「哔哔啵啵」的说话声。零依赖，浏览器与 Node 通用。
-//
+// beepblips.js
 // 一条锯齿波过三个共振峰、一个字一声、标点管语气、同字同声；
 // 再加上文本分析（分词/数字/音节/拼音）、连续音高与字间共音、
 // 辅音手势、可深度定制的声线、时间轴 cues、软限幅与可选混响。
 //
 // 流程：normalize → segment → tokenize → 读音展开 → 韵律（Plan）→ 单通道合成 → WAV。
 // 所有音色与韵律参数都是数据，改声线不用碰 DSP。
+// (c) 2026 MIAR STAFF, beepblips contributors.
 
 // ─────────────────────────── 1. 数值与哈希 ───────────────────────────
 

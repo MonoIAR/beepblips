@@ -1,0 +1,67 @@
+name: Deploy demo to GitHub Pages
+
+# One-time setup: Settings → Pages → Build and deployment → Source: GitHub
+# Actions. This workflow does not enable Pages itself; with the default
+# GITHUB_TOKEN it cannot, so the "Configure Pages" step fails until the source
+# is set to GitHub Actions.
+#
+# The demo is a single self-contained file: index.html already has the engine
+# inlined by build.mjs, so there is nothing to compile. Test, verify the page
+# is in sync with beepblips.js, then publish index.html as the site root.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; never cancel a run that is halfway through
+# publishing.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Check that index.html matches beepblips.js
+        run: node build.mjs --check
+
+      - name: Run the test suite
+        run: npm test
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload the site artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
