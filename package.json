@@ -1,0 +1,37 @@
+{
+  "name": "@monoiar/beepblips",
+  "version": "0.1.0",
+  "description": "Bleep synthesizer in one file.",
+  "type": "module",
+  "main": "./beepblips.js",
+  "exports": {
+    ".": "./beepblips.js"
+  },
+  "bin": {
+    "beepblips": "./cli.mjs"
+  },
+  "files": [
+    "beepblips.js",
+    "cli.mjs",
+    "index.html",
+    "build.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/",
+    "build": "node build.mjs",
+    "check": "node build.mjs --check"
+  },
+  "keywords": [
+    "speech",
+    "synthesis",
+    "formant",
+    "bleep",
+    "wav"
+  ],
+  "license": "MIT"
+}
