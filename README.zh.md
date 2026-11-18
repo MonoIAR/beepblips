@@ -2,6 +2,8 @@
 
 **单文件“哔哔语”合成器**
 
+[![CI](https://github.com/MonoIAR/beepblips/actions/workflows/ci.yml/badge.svg)](https://github.com/MonoIAR/beepblips/actions/workflows/ci.yml)
+
 [English README](README.md)
 
 beepblips 把一句话变成动森、蔚蓝里那种“哔哔啵啵”的说话声。没有录音采样，也没有神经网络：一条锯齿波过三个共振峰滤波器，每个音节发一声，标点决定旋律上扬、下落还是拖长。引擎是约 47 KiB 的纯 JavaScript，不做任何 I/O，同一份文件能跑在 Node、浏览器和自带的演示页里。
@@ -47,7 +49,7 @@ import {speak} from '@monoiar/beepblips';
 
 用任意静态服务器打开页面即可——浏览器不允许从 `file://` 加载 ES module。自带的演示页在构建时把引擎内联进 HTML，所以双击 `index.html` 也能用。
 
-CLI 和测试需要 Node 18+；引擎本身是普通 ES2020，也能在 Deno、Bun 和 Web Worker 里运行。
+CLI 和测试需要 Node 22+；引擎本身是普通 ES2020，也能在 Deno、Bun 和 Web Worker 里运行。
 
 ## 快速开始
 

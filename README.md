@@ -2,6 +2,8 @@
 
 **Bleep synthesizer in one file**
 
+[![CI](https://github.com/MonoIAR/beepblips/actions/workflows/ci.yml/badge.svg)](https://github.com/MonoIAR/beepblips/actions/workflows/ci.yml)
+
 [中文 README](README.zh.md)
 
 beepblips (or `beepblips.js` if you prefer) turns a sentence into the "beep bleep" language in video games like Animal Crossing and Celeste. No recorded samples, no neural network: a sawtooth with three formant filters, every syllable gets one blip, and the punctuation decides whether the melody rises, falls, or trails off. The engine is ~47 KiB of plain JavaScript with no I/O, so the same file runs in Node, in the browser, and in the bundled demo page.
@@ -55,7 +57,7 @@ import {speak} from '@monoiar/beepblips';
 
 Serve the page from any static server, or a bundler dev server — browsers block module imports from `file://`. The bundled demo page sidesteps this by inlining the engine at build time, which is why double-clicking `index.html` works.
 
-Node 18+ is required for the bundled CLI and test suite; the engine itself is plain ES2020 and also runs in Deno, Bun, and web workers.
+Node 22+ is required for the bundled CLI and test suite; the engine itself is plain ES2020 and also runs in Deno, Bun, and web workers.
 
 ## Quick start
 
