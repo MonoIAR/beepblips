@@ -34,7 +34,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test",
     "build": "node build.mjs",
     "check": "node build.mjs --check"
   },
