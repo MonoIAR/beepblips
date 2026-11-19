@@ -28,7 +28,8 @@ test('演示页引用的 DOM id 都存在且不重复', () => {
   for (const id of refs) assert.ok(ids.includes(id), `DOM 引用 "${id}" 没有对应元素`);
 });
 
-test('演示页的脚本能在最小 DOM 里跑完一次合成', () => {
+/** 在最小 DOM 里跑一遍演示页脚本，返回被写入的节点。 */
+function runDemo(text) {
   const match = html.match(/<script type="module">([\s\S]*?)<\/script>/);
   assert.ok(match, 'index.html 里找不到内联 module');
   const code = match[1];
@@ -52,7 +53,7 @@ test('演示页的脚本能在最小 DOM 里跑完一次合成', () => {
 
   const nodes = new Map();
   const initial = {
-    text: '今天吃白饭？没饭了！',
+    text,
     voice: 'bibi',
     mode: 'auto',
     language: 'auto',
@@ -103,6 +104,11 @@ test('演示页的脚本能在最小 DOM 里跑完一次合成', () => {
   const run = new Function('document', 'window', 'requestAnimationFrame', 'cancelAnimationFrame', 'Blob', 'URL',
     `${code}\n//# sourceURL=index.html`);
   run(document, window, () => 0, () => {}, Blob, URL);
+  return nodes;
+}
+
+test('演示页的脚本能在最小 DOM 里跑完一次合成', () => {
+  const nodes = runDemo('今天吃白饭？没饭了！');
 
   const stats = nodes.get('stats');
   assert.ok(stats, '统计行没有被写入');
@@ -116,4 +122,12 @@ test('演示页的脚本能在最小 DOM 里跑完一次合成', () => {
   const cues = nodes.get('cue-body');
   assert.ok(cues, '口型表没有被写入');
   assert.match(cues.innerHTML, /<tr><td>1<\/td>/);
+});
+
+test('演示页能直接读假名', () => {
+  const nodes = runDemo('こんにちは、きょうも はれですね。');
+
+  assert.match(nodes.get('stats').innerHTML, /lang <b>ja<\/b>/);
+  assert.match(nodes.get('cue-body').innerHTML, /こ/);
+  assert.match(nodes.get('mouth-meta').textContent, /cues/);
 });

@@ -353,13 +353,19 @@ function pauseFor(mark) {
   return 0.3;
 }
 
+const KANA_RE = /[\u3041-\u309F\u30A1-\u30FF]/;
+
 function detectLanguage(src) {
   let cjk = 0;
+  let kana = 0;
   let latin = 0;
   for (const c of src) {
-    if (CJK_RE.test(c)) cjk += 1;
+    if (KANA_RE.test(c)) kana += 1;
+    else if (CJK_RE.test(c)) cjk += 1;
     else if (/[A-Za-z]/.test(c)) latin += 1;
   }
+  // 出现假名就是日语：汉字别的语言也用，假名只有日语用
+  if (kana) return 'ja';
   if (!cjk) return 'en';
   if (!latin) return 'zh';
   return cjk >= latin / 3 ? 'zh' : 'en';
@@ -367,16 +373,17 @@ function detectLanguage(src) {
 
 // ─────────────────────────── 4. 分词与读音展开 ───────────────────────────
 
-const TOKEN_RE = /([A-Za-z]+(?:['\-][A-Za-z]+)*)|(\d+(?:\.\d+)?)|([\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF])|([\s\S])/gu;
+const TOKEN_RE = /([A-Za-z]+(?:['\-][A-Za-z]+)*)|(\d+(?:\.\d+)?)|([\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF])|([\u3041-\u309F\u30A1-\u30FF]+)|([\s\S])/gu;
 
-/** 汉字 / 拉丁词 / 数字 / 其他（假名、韩文、西里尔、表情符号……）。 */
+/** 汉字 / 假名串 / 拉丁词 / 数字 / 其他（韩文、西里尔、表情符号……）。 */
 function tokenize(text) {
   const out = [];
   for (const m of text.matchAll(TOKEN_RE)) {
     if (m[1] !== undefined) out.push({type: 'word', text: m[1]});
     else if (m[2] !== undefined) out.push({type: 'number', text: m[2]});
     else if (m[3] !== undefined) out.push({type: 'cjk', text: m[3]});
-    else if (m[4] !== undefined && !/\s/u.test(m[4])) out.push({type: 'other', text: m[4]});
+    else if (m[4] !== undefined) out.push({type: 'kana', text: m[4]});
+    else if (m[5] !== undefined && !/\s/u.test(m[5])) out.push({type: 'other', text: m[5]});
   }
   return out;
 }
@@ -467,18 +474,69 @@ function spellEnInt(n) {
   return parts.join(' ');
 }
 
-/** 数字 → 文字的字符串（中文按万/亿分组，英文按 thousand/million）。 */
+// —— 日语数字：读成假名，直接交给上面的假名前端 ——
+const JA_DIGITS = ['れい', 'いち', 'に', 'さん', 'よん', 'ご', 'ろく', 'なな', 'はち', 'きゅう'];
+const JA_BIG = ['', 'まん', 'おく', 'ちょう'];
+
+/** 十/百/千 的位，带日语里那几个固定音变。 */
+function jaUnit(d, place) {
+  const digit = JA_DIGITS[d];
+  if (place === 1) return d === 1 ? 'じゅう' : `${digit}じゅう`;
+  if (place === 2) {
+    if (d === 1) return 'ひゃく';
+    if (d === 3) return 'さんびゃく';
+    if (d === 6) return 'ろっぴゃく';
+    if (d === 8) return 'はっぴゃく';
+    return `${digit}ひゃく`;
+  }
+  if (d === 1) return 'せん';
+  if (d === 3) return 'さんぜん';
+  if (d === 8) return 'はっせん';
+  return `${digit}せん`;
+}
+
+/** 日语不念零：1005 是 せんご，不是 せんれいご。 */
+function spellJaInt(n) {
+  if (n === 0) return 'ぜろ';
+  const groups = [];
+  let x = n;
+  while (x > 0) {
+    groups.push(x % 10000);
+    x = Math.floor(x / 10000);
+  }
+  let out = '';
+  for (let i = groups.length - 1; i >= 0; i -= 1) {
+    const g = groups[i];
+    if (!g) continue;
+    let part = '';
+    for (let place = 3; place >= 1; place -= 1) {
+      const d = Math.floor(g / 10 ** place) % 10;
+      if (d) part += jaUnit(d, place);
+    }
+    if (g % 10) part += JA_DIGITS[g % 10];
+    out += part + JA_BIG[i];
+  }
+  return out;
+}
+
+/** 数字 → 文字的字符串（中文按万/亿分组，日语同理，英文按 thousand/million）。 */
 function spellNumber(raw, language) {
   const text = String(raw);
   const digits = text.replace('.', '');
   if (digits.length > 12) {
     // 太长的号码逐位念
-    return [...digits].map((d) => (language === 'zh' ? CN_DIGITS[+d] : EN_ONES[+d])).join(language === 'zh' ? '' : ' ');
+    const names = language === 'zh' ? CN_DIGITS : language === 'ja' ? JA_DIGITS : EN_ONES;
+    return [...digits].map((d) => names[+d]).join(language === 'en' ? ' ' : '');
   }
   const [intPart, fracPart] = text.split('.');
   if (language === 'zh') {
     let out = spellZhInt(Number(intPart));
     if (fracPart) out += `点${[...fracPart].map((d) => CN_DIGITS[+d]).join('')}`;
+    return out;
+  }
+  if (language === 'ja') {
+    let out = spellJaInt(Number(intPart));
+    if (fracPart) out += `てん${[...fracPart].map((d) => JA_DIGITS[+d]).join('')}`;
     return out;
   }
   let out = spellEnInt(Number(intPart));
@@ -621,7 +679,7 @@ function syllabifyWord(word) {
   return out;
 }
 
-// ─────────────────────────── 5. 拼音前端 ───────────────────────────
+// ─────────────────────────── 5. 拼音与假名前端 ───────────────────────────
 
 const PINYIN_INITIALS = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h',
   'j', 'q', 'x', 'r', 'z', 'c', 's', 'y', 'w'];
@@ -675,7 +733,8 @@ const PINYIN_FINALS = {
   apical: {v: ['apical']},
 };
 
-const PINYIN_ONSETS = {
+/** 辅音手势表。拼音按声母查，假名按行查，两边口型都够用。 */
+const ONSETS = {
   '': {type: 'none', lead: 0},
   b: {type: 'stop', freq: 1200, q: 2, closure: 0.012, burst: 0.35, lead: 0.03},
   p: {type: 'stop', freq: 1400, q: 2, closure: 0.014, burst: 0.7, lead: 0.034},
@@ -759,7 +818,7 @@ function parsePinyin(raw) {
 function pinyinSyllable(raw) {
   const p = parsePinyin(raw);
   if (!p) return null;
-  const g = PINYIN_ONSETS[p.initial] ?? PINYIN_ONSETS[''];
+  const g = ONSETS[p.initial] ?? ONSETS[''];
   return {
     text: raw,
     vowels: p.entry.v.slice(),
@@ -783,6 +842,113 @@ function looksLikePinyin(src) {
     if (/[0-5]$/.test(bare) || TONE_MARK_RE.test(tok)) toned = true;
   }
   return toned;
+}
+
+// —— 假名 → モーラ ——
+// 五十音直接查表：元音按段取，声母复用上面那张手势表。
+// 促音「っ」是一拍静音，长音「ー」把前一拍再拖一拍，拨音「ん」是整拍鼻音。
+
+const KANA_VOWELS = ['a', 'i', 'u', 'e', 'o'];
+
+/** 行 → 五个假名，空格用 null 占位。 */
+const KANA_ROWS = {
+  '': ['あ', 'い', 'う', 'え', 'お'],
+  k: ['か', 'き', 'く', 'け', 'こ'],
+  g: ['が', 'ぎ', 'ぐ', 'げ', 'ご'],
+  s: ['さ', 'し', 'す', 'せ', 'そ'],
+  z: ['ざ', 'じ', 'ず', 'ぜ', 'ぞ'],
+  t: ['た', 'ち', 'つ', 'て', 'と'],
+  d: ['だ', 'ぢ', 'づ', 'で', 'ど'],
+  n: ['な', 'に', 'ぬ', 'ね', 'の'],
+  h: ['は', 'ひ', 'ふ', 'へ', 'ほ'],
+  b: ['ば', 'び', 'ぶ', 'べ', 'ぼ'],
+  p: ['ぱ', 'ぴ', 'ぷ', 'ぺ', 'ぽ'],
+  m: ['ま', 'み', 'む', 'め', 'も'],
+  y: ['や', null, 'ゆ', null, 'よ'],
+  r: ['ら', 'り', 'る', 'れ', 'ろ'],
+  w: ['わ', null, null, null, 'を'],
+  v: ['ゔ', null, null, null, null],
+};
+
+/** 行不规整的假名：し / ち / つ / ふ / じ / ぢ / づ 借拼音现成的声母。 */
+const KANA_ONSET_ALIAS = {し: 'sh', ち: 'ch', つ: 'c', ふ: 'f', じ: 'j', ぢ: 'j', づ: 'z'};
+
+const KANA_TABLE = new Map();
+for (const [onset, row] of Object.entries(KANA_ROWS)) {
+  row.forEach((ch, i) => {
+    if (ch) KANA_TABLE.set(ch, {onset: KANA_ONSET_ALIAS[ch] ?? onset, vowel: KANA_VOWELS[i]});
+  });
+}
+
+// を 只做宾格助词，永远念 o，别念成 wo
+KANA_TABLE.set('を', {onset: '', vowel: 'o'});
+
+/** 拗音和外来音的第二拍：只换元音，仍然算一拍。 */
+const SMALL_VOWELS = {ぁ: 'a', ぃ: 'i', ぅ: 'u', ぇ: 'e', ぉ: 'o', ゃ: 'a', ゅ: 'u', ょ: 'o', ゎ: 'a'};
+const YOON = new Set(['ゃ', 'ゅ', 'ょ']);
+
+/** 片假名 → 平假名，和五十音共用同一张表。 */
+function toHiragana(ch) {
+  const cp = ch.codePointAt(0);
+  return cp >= 0x30a1 && cp <= 0x30f6 ? String.fromCodePoint(cp - 0x60) : ch;
+}
+
+function kanaSyllable(text, part) {
+  const g = ONSETS[part.onset] ?? ONSETS[''];
+  const syllable = {
+    text,
+    vowels: [part.vowel],
+    onset: {...g},
+    coda: null,
+    tone: null,
+    toneScale: 1,
+    stress: 0,
+    jitter: unit(hash(text), 0x9e37),
+    kind: 'kana',
+    moras: 1,
+  };
+  if (part.nasalOnly) syllable.nasalOnly = true;
+  return syllable;
+}
+
+/** 假名串 → モーラ列表。・ ゛ 之类认不出来的假名当标点跳过。 */
+function kanaSyllables(text) {
+  const out = [];
+  let prev = null;
+  for (let i = 0; i < text.length; i += 1) {
+    const raw = text[i];
+    if (raw === 'っ' || raw === 'ッ') {
+      // 促音占一拍，但自己不发声；后面那个辅音负责把这一拍填满
+      out.push({text: raw, kind: 'kana', pause: true, moras: 1});
+      prev = null;
+      continue;
+    }
+    if (raw === 'ー') {
+      // 长音把前一拍再拖一拍，声调曲线跟着一起拉长
+      if (prev) prev.moras += 1;
+      continue;
+    }
+    const ch = toHiragana(raw);
+    if (ch === 'ん') {
+      prev = kanaSyllable(raw, {onset: 'n', vowel: 'ə', nasalOnly: true});
+      out.push(prev);
+      continue;
+    }
+    const base = KANA_TABLE.get(ch);
+    if (!base) continue;
+    const next = text[i + 1] ? toHiragana(text[i + 1]) : '';
+    const small = SMALL_VOWELS[next];
+    // きゃ / しぇ / ふぁ / てぃ：辅音不变、只换元音，占一拍
+    if (small && (YOON.has(next) || base.onset !== '')) {
+      prev = kanaSyllable(raw + text[i + 1], {onset: base.onset, vowel: small});
+      out.push(prev);
+      i += 1;
+      continue;
+    }
+    prev = kanaSyllable(raw, {onset: base.onset, vowel: base.vowel});
+    out.push(prev);
+  }
+  return out;
 }
 
 // ─────────────────────────── 6. 音节与韵律 ───────────────────────────
@@ -850,7 +1016,8 @@ function textSyllables(text, sf) {
     if (tok.type === 'word') list = wordSyllables(tok.text, sf);
     else if (tok.type === 'number') {
       for (const ch of tok.text) list.push(hashSyllable(ch, 'other'));
-    } else if (tok.type === 'cjk') list = [hashSyllable(tok.text, 'cjk')];
+    } else if (tok.type === 'kana') list = kanaSyllables(tok.text);
+    else if (tok.type === 'cjk') list = [hashSyllable(tok.text, 'cjk')];
     else if (speakable(tok.text)) list = [hashSyllable(tok.text, 'other')];
     if (!list.length) continue;
     const wordId = sf.word++;
@@ -920,9 +1087,22 @@ function buildPlan(sentences, src, sf, opts) {
       const n = clause.syllables.length;
       const lastClause = ci === sentence.clauses.length - 1;
       if (!n) continue;
+      // 促音占位项不发声，句尾/小句尾要落在最后一个真音节上
+      const lastReal = clause.syllables.reduce((last, s, i) => (s.pause ? last : i), -1);
       for (let k = 0; k < n; k += 1) {
         const syl = clause.syllables[k];
-        const clauseLast = k === n - 1;
+        if (syl.pause) {
+          // 促音：一整拍静音，后面那个辅音的闭口正好接上
+          const hold = base * (syl.moras ?? 1);
+          events.push({kind: 'pause', t0: t, t1: t + hold, reason: syl.text, after: 'mora'});
+          t += hold;
+          if (t > maxDuration) {
+            truncated = true;
+            break outer;
+          }
+          continue;
+        }
+        const clauseLast = k === lastReal;
         const sentenceLast = lastClause && clauseLast;
         const pos = (done + k + 0.5) / total;
         const accent = syl.stress ? c.accent
@@ -934,8 +1114,11 @@ function buildPlan(sentences, src, sf, opts) {
           const p = shape.length === 1 ? 0 : i / (shape.length - 1);
           return v * (syl.toneScale ?? 1) + decl + accent + (termKind ? terminalAt(termKind, p, c) : 0);
         });
-        const factor = sentenceLast ? 1.55 : clauseLast ? 1.35 : syl.stress ? 0.92 : 0.78;
-        const dur = Math.max(0.03, base * factor * (syl.tone === 3 ? 1.08 : 1));
+        // 日语是等モーラ节奏：普通拍几乎一样长，只有小句/句尾稍微拖一点
+        const factor = syl.kind === 'kana'
+          ? (sentenceLast ? 1.4 : clauseLast ? 1.08 : 0.85)
+          : (sentenceLast ? 1.55 : clauseLast ? 1.35 : syl.stress ? 0.92 : 0.78);
+        const dur = Math.max(0.03, base * factor * (syl.tone === 3 ? 1.08 : 1) * (syl.moras ?? 1));
         events.push({
           kind: 'syl',
           t0: t,
@@ -951,6 +1134,7 @@ function buildPlan(sentences, src, sf, opts) {
           tone: syl.tone,
           jitter: syl.jitter,
           kindOf: syl.kind,
+          ...(syl.kind === 'kana' ? {moras: syl.moras, nasalOnly: syl.nasalOnly} : {}),
           phraseId: si,
           terminal: sentenceLast,
           finalSyl: clauseLast,
@@ -1029,7 +1213,10 @@ export function analyze(text, opts = {}) {
   const sentences = [];
   for (const s of segment(src)) {
     const clauses = s.clauses.map((cl) => ({mark: cl.mark, syllables: syllablesOf(cl.text, sf)}));
-    if (clauses.some((cl) => cl.syllables.length)) sentences.push({kind: s.kind, end: s.end, clauses});
+    // 只有促音占位、没有真音节的小句不出声
+    if (clauses.some((cl) => cl.syllables.some((syl) => !syl.pause))) {
+      sentences.push({kind: s.kind, end: s.end, clauses});
+    }
   }
 
   if (!sentences.length) {
@@ -1265,7 +1452,8 @@ export function render(plan, opts = {}) {
     const jitter = (ev.jitter ?? 0) * voice.jitter;
     const pStart = phraseStart.get(ev.phraseId ?? 0) ?? ev.t0;
     const onset = ev.onset ?? {type: 'none'};
-    const lead = Math.min(onsetLead(onset), dur * 0.45);
+    // 拨音没有辅音起音，整拍就是一个持续的鼻音
+    const lead = ev.nasalOnly ? 0 : Math.min(onsetLead(onset), dur * 0.45);
     const amp = (ev.amp ?? 1) * voice.gain;
 
     for (let i = 0; i < count; i += 1) {
@@ -1303,7 +1491,7 @@ export function render(plan, opts = {}) {
         }
       }
 
-      const nasal = inOnset && onset.type === 'nasal';
+      const nasal = onset.type === 'nasal' && (inOnset || ev.nasalOnly === true);
       const liquid = inOnset && onset.type === 'liquid';
 
       if (i % ctrl === 0) {

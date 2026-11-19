@@ -23,7 +23,7 @@ const USAGE = `beepblips ${pkg.version} —— 把一句话变成「哔哔啵啵
       --tempo <数字>  每秒几个音节（默认取声线设置，约 6–8）
       --pitch <半音>  整体移调（默认 0）
       --mode <模式>   auto | text | pinyin（默认 auto）
-      --lang <语言>   auto | zh | en（影响数字读法，默认 auto）
+      --lang <语言>   auto | zh | en | ja（影响数字读法，默认 auto）
       --rate <Hz>     采样率（默认 44100）
       --seed <数字>   抖动/噪声种子（默认 0，同样的种子结果完全一致）
       --reverb <0..1> 混响湿声（默认 0）
@@ -35,6 +35,7 @@ const USAGE = `beepblips ${pkg.version} —— 把一句话变成「哔哔啵啵
 例子：
   beepblips "今天吃白饭？没饭了！" -o out.wav
   beepblips --mode pinyin "ni3 hao3" -o hi.wav --cues
+  beepblips "こんにちは、きょうも はれですね" -o ja.wav --cues
   beepblips "hello, world" --voice robot --reverb 0.2`;
 
 const OPTIONS = {

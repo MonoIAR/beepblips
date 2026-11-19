@@ -6,12 +6,13 @@
 
 [English README](README.md)
 
-beepblips 把一句话变成动森、蔚蓝里那种“哔哔啵啵”的说话声。没有录音采样，也没有神经网络：一条锯齿波过三个共振峰滤波器，每个音节发一声，标点决定旋律上扬、下落还是拖长。引擎是约 47 KiB 的纯 JavaScript，不做任何 I/O，同一份文件能跑在 Node、浏览器和自带的演示页里。
+beepblips 把一句话变成动森、蔚蓝里那种“哔哔啵啵”的说话声。没有录音采样，也没有神经网络：一条锯齿波过三个共振峰滤波器，每个音节发一声，标点决定旋律上扬、下落还是拖长。引擎是约 53 KiB 的纯 JavaScript，不做任何 I/O，同一份文件能跑在 Node、浏览器和自带的演示页里。
 
 ## 支持的语言
 
 - **中文 · 拼音**：最接近真人中文，效果最好。
 - **中文 · 汉字**：按哈希决定发音。
+- **日语 · 假名**：平假名和片假名按モーラ读，元音和节奏都是真的；汉字仍按哈希。
 - **英文**：效果还不错。
 - 其他语言：按哈希决定发音。
 
@@ -115,6 +116,7 @@ source.start();
 ```bash
 node cli.mjs "今天吃白饭？没饭了！" -o out.wav
 node cli.mjs --mode pinyin "ni3 hao3" --voice warm --reverb 0.25 --cues
+node cli.mjs "こんにちは、きょうも はれですね" -o ja.wav --cues
 node cli.mjs "hello, world" --voice robot --json
 ```
 
@@ -124,7 +126,7 @@ node cli.mjs "hello, world" --voice robot --json
 | `--voice <名字>` | `bibi`、`warm`、`robot`、`squeak` |
 | `--tempo <数字>` / `--pitch <半音>` | 语速 / 移调 |
 | `--mode <模式>` | `auto`、`text`、`pinyin` |
-| `--lang <语言>` | `auto`、`zh`、`en` |
+| `--lang <语言>` | `auto`、`zh`、`en`、`ja` |
 | `--rate <Hz>` / `--seed <数字>` / `--reverb <0..1>` | 采样率 / 随机种子 / 混响 |
 | `--cues` / `--json` | 打印音节时间轴 / 乐谱 JSON |
 | `-h, --help` / `-v, --version` | 帮助 / 版本 |
@@ -146,18 +148,19 @@ node cli.mjs "hello, world" --voice robot --json
 ## 测试与构建
 
 ```bash
-npm test                 # node --test，39 个用例，零依赖
+npm test                 # node --test，54 个用例，零依赖
 node build.mjs           # 把引擎内联进 index.html
 node build.mjs --check   # 检查演示页是否与引擎同步（CI 用）
 ```
 
 ## 限制
 
-- 这是「哔哔声」，不是真正的 TTS：没有发音词典，任意汉字的元音来自哈希；想要真实元音请用拼音模式。
+- 这是「哔哔声」，不是真正的 TTS：没有发音词典，任意汉字的元音来自哈希；想要真实元音请用拼音或假名。
 - 拉丁词切音节是启发式的，常见词没问题，生僻词会出错。
 - 输出是单声道 16 位 WAV；没有实时调度和流式渲染，全部同步完成。
 - 缓冲区一次性分配：44.1 kHz 下十分钟约 106 MB，`maxDuration` 默认 600 秒。
 - 拼音模式要求音节之间用空格分开；拼音串里混入汉字不会报错，但每个汉字会退回哈希元音并记一条 warning。
+- 假名只做前端，不是日语朗读器：假名串里的汉字仍按哈希，助词 は / へ 按字面读，没有音高重音词典，半角片假名会退成一字一声。
 - 超过 12 位的数字会逐位读。
 - 暂不提供 TypeScript 类型声明。
 

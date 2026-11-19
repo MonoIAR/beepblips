@@ -6,12 +6,13 @@
 
 [中文 README](README.zh.md)
 
-beepblips (or `beepblips.js` if you prefer) turns a sentence into the "beep bleep" language in video games like Animal Crossing and Celeste. No recorded samples, no neural network: a sawtooth with three formant filters, every syllable gets one blip, and the punctuation decides whether the melody rises, falls, or trails off. The engine is ~47 KiB of plain JavaScript with no I/O, so the same file runs in Node, in the browser, and in the bundled demo page.
+beepblips (or `beepblips.js` if you prefer) turns a sentence into the "beep bleep" language in video games like Animal Crossing and Celeste. No recorded samples, no neural network: a sawtooth with three formant filters, every syllable gets one blip, and the punctuation decides whether the melody rises, falls, or trails off. The engine is ~53 KiB of plain JavaScript with no I/O, so the same file runs in Node, in the browser, and in the bundled demo page.
 
 ## Language it supports
 
 - **ZH** Pinyin: kinda like real Chinese speech, best results.
 - **ZH** Hanzi: Hash-based pronunciation only.
+- **JA** Kana: real vowels and even mora rhythm for hiragana and katakana; kanji still fall back to hashed vowels.
 - **EN** English: Works fine.
 - Other languages: Hash-based pronunciation only.
 
@@ -125,7 +126,7 @@ That is the whole integration: `speak()` hands you a mono `Float32Array`; `toWav
 | `tempo` | voice's `tempo` (7) | syllables per second, clamped 1–30 | analyze |
 | `pitch` | `0` | transpose in semitones, any finite number | render |
 | `mode` | `'auto'` | `'auto'`, `'text'`, `'pinyin'` | analyze |
-| `language` | `'auto'` | `'auto'`, `'zh'`, `'en'` — affects number reading only | analyze |
+| `language` | `'auto'` | `'auto'`, `'zh'`, `'en'`, `'ja'` — affects number reading only | analyze |
 | `readNumbers` | `true` | boolean: words for numbers, or one blip per digit | analyze |
 | `readAcronyms` | `true` | boolean: read all-caps 2–5 letter words as letter names | analyze |
 | `pauseScale` | `1` | multiplier for punctuation pauses, clamped 0.2–3 | analyze |
@@ -212,7 +213,8 @@ Field notes:
 - **`amp`** is relative loudness: 1 normally, 1.22 for exclamations, 0.86 for sentences trailing off.
 - **`tone`** is the Chinese tone number (1–4, with 0 for the neutral tone) when the syllable has one, otherwise `null`.
 - **`stress`**, **`terminal`**, **`finalSyl`**, and **`phraseId`** carry the prosody decisions: word stress, end of sentence, end of clause, and which sentence the syllable belongs to.
-- **`kindOf`** is `latin`, `pinyin`, `cjk`, or `other`; an onset gesture is `none`, `stop`, `fric`, `nasal`, or `liquid` — as `event.onset.type` in the plan, and as the plain string `cue.onset`.
+- **`kindOf`** is `latin`, `pinyin`, `cjk`, `kana`, or `other`; an onset gesture is `none`, `stop`, `fric`, `nasal`, or `liquid` — as `event.onset.type` in the plan, and as the plain string `cue.onset`.
+- **`moras`** and **`nasalOnly`** only appear on kana events: how many beats the syllable holds (`コー` is 2) and whether it is a moraic nasal (`ん`), which the render keeps nasal for the whole beat.
 - **`cues`** is the animation view of the same data, and the render stage adds absolute `midi` to it.
 - **`warnings`** collects recoverable input problems (for example, a pinyin token that could not be parsed); **`truncated`** is `true` when `maxDuration` cut the text short.
 
@@ -382,9 +384,9 @@ Presets are deep-frozen, `defineVoice()` always returns a fresh object, and its 
 1. **Normalize.** Full-width characters become half-width, `。` becomes `.`, `、` becomes `,`, `……` and `...` collapse to `…`, decorative quotes and brackets are dropped, thousand separators are removed, and hyphens inside words survive.
 2. **Segment.** `. ! ? …` and newlines end a sentence; `, ; :` split clauses. Decimals (`3.14`) and in-word hyphens are never split.
 3. **Classify.** `?` makes a rising tail, `!` makes the sentence louder and higher, `…` trails off lower and longer, everything else falls like a statement, and a clause break only half-stops.
-4. **Expand to syllables.** Hanzi get one blip per character. Latin words split on vowel groups (`beepblips` → *beep·blips*, `synthesis` → *syn·the·sis*, `table` → *ta·ble*). Numbers become words (`2024` → *two thousand twenty-four*, in Chinese *二千零二十四*), and decimals are read digit by digit after "point". All-caps words of 2–5 letters are spelled out (`API` → *A P I*). Emoji, kana, Hangul, and Cyrillic characters each get one blip. ASCII punctuation is silent.
+4. **Expand to syllables.** Hanzi get one blip per character. Kana runs become mora (see [Kana](#kana-japanese)). Latin words split on vowel groups (`beepblips` → *beep·blips*, `synthesis` → *syn·the·sis*, `table` → *ta·ble*). Numbers become words (`2024` → *two thousand twenty-four*, in Chinese *二千零二十四*, in Japanese *にせんにじゅうよん*), and decimals are read digit by digit after "point". All-caps words of 2–5 letters are spelled out (`API` → *A P I*). Emoji, Hangul, and Cyrillic characters each get one blip. ASCII punctuation is silent.
 5. **Choose the phonetics.** For Hanzi a hash of the character picks the vowel, consonant, tone, and micro-jitter — the same character always sounds the same, and the four dimensions are decorrelated so a text does not collapse into five repeating voices. Latin words derive their vowels and consonants from their own letters.
-6. **Plan the prosody.** Every clause gets a downward drift, the sentence kind adds a terminal contour on top, stressed syllables sit higher, and the last syllable of a clause is stretched (0.78× the base for ordinary syllables, 1.35× at a clause end, 1.55× at a sentence end). Pauses follow the punctuation.
+6. **Plan the prosody.** Every clause gets a downward drift, the sentence kind adds a terminal contour on top, stressed syllables sit higher, and the last syllable of a clause is stretched (0.78× the base for ordinary syllables, 1.35× at a clause end, 1.55× at a sentence end). Kana switches to even mora timing instead (0.85×, 1.08×, 1.4×), because a Japanese mora is a beat, not a stressed syllable. Pauses follow the punctuation.
 
 Pause lengths, before `pauseScale`:
 
@@ -411,6 +413,26 @@ speak('jin1 tian1 chi1 shen2 me5');             // no mode needed: auto-detectio
 - `mode: 'auto'` is conservative: it only switches to pinyin when every token looks like pinyin *and* at least one carries a tone mark or a tone digit, so ordinary English is never mistaken for pinyin.
 - A token that cannot be parsed falls back to ordinary text and is reported in `plan.warnings`, so one bad syllable does not break the sentence.
 
+## Kana (Japanese)
+
+Hiragana and katakana are read as mora. No mode switch, no dictionary, no extra option:
+
+```js
+speak('こんにちは');                             // auto-detected as Japanese
+speak('おはよう！きょうも はれですね。');          // yōon, sokuon, long vowels
+speak('カフェで コーヒーを のみましょう。');       // katakana uses the same table
+```
+
+- Each kana is one mora. Its row picks the consonant gesture and its vowel column picks the formants; し / ち / つ / ふ / じ / ぢ / づ reuse the pinyin gestures for *sh* / *ch* / *ts* / *ɸ* / *j*, so no second consonant table exists.
+- っ is one mora of silence. The next consonant's closure lands on that beat, which is why がっこう is four mora and not three.
+- ー lengthens the mora before it: コーヒー is two syllables and four mora, and the pitch contour stretches with the vowel.
+- ん is a nasal hum for the whole beat (`nasalOnly` on the event), not a vowel with an *n* in front.
+- きゃ / しゅ / ちょ count as one mora, and foreign combinations (ふぁ, てぃ, しぇ) collapse the vowel the same way.
+- Rhythm is even: non-final mora share one duration and only clause and sentence ends are stretched, so `tempo` is mora per second. `を` is always *o*.
+- Japanese has no lexical tone, so `tone` is `null` and the melody is the shared declination plus the punctuation contour. There is no pitch-accent dictionary, and は / へ keep their spelling pronunciation when they act as particles.
+- Once kana appears, `language` resolves to `'ja'` and numbers are read in Japanese (`2026` → にせんにじゅうろく, `300` → さんびゃく, `3.5` → さんてんご) before going through the same front end. A bare number still needs `{language: 'ja'}` because there is no kana to detect.
+- Kanji mixed into kana text still get one hashed blip per character. That is the same trade-off as Hanzi in pinyin mode.
+
 ## How it works
 
 ```
@@ -428,6 +450,7 @@ Text in, WAV out — no code required:
 ```bash
 node cli.mjs "今天吃白饭？没饭了！" -o out.wav
 node cli.mjs --mode pinyin "ni3 hao3" --voice warm --reverb 0.25 --cues
+node cli.mjs "こんにちは、きょうも はれですね" -o ja.wav --cues
 node cli.mjs "hello, world" --voice robot --json
 ```
 
@@ -438,7 +461,7 @@ node cli.mjs "hello, world" --voice robot --json
 | `--tempo <n>` | Syllables per second |
 | `--pitch <semitones>` | Transpose |
 | `--mode <mode>` | `auto`, `text`, `pinyin` |
-| `--lang <lang>` | `auto`, `zh`, `en` |
+| `--lang <lang>` | `auto`, `zh`, `en`, `ja` |
 | `--rate <Hz>` | Sample rate |
 | `--seed <n>` | Jitter and noise seed |
 | `--reverb <0..1>` | Wet mix |
@@ -466,12 +489,12 @@ The page inlines the engine, so after editing `beepblips.js` run `node build.mjs
 ## Tests and build
 
 ```bash
-npm test                 # node --test, 39 cases, no dependencies
+npm test                 # node --test, 54 cases, no dependencies
 node build.mjs           # inline the engine into index.html
 node build.mjs --check   # verify the demo page is in sync (CI)
 ```
 
-Coverage: normalization and segmentation, Latin syllabification, number reading, pinyin parsing, prosody contours, hash decorrelation, render finiteness / peak / DC offset, pitch accuracy of a hand-written plan, reverb tail, WAV header fields, build synchronization, demo-page DOM references, and a smoke run of the demo script inside a minimal DOM.
+Coverage: normalization and segmentation, Latin syllabification, number reading (English, Chinese, Japanese), pinyin parsing, kana mora parsing (sokuon, long vowels, yōon, moraic nasal, even rhythm), prosody contours, hash decorrelation, render finiteness / peak / DC offset, pitch accuracy of a hand-written plan, reverb tail, WAV header fields, build synchronization, demo-page DOM references, and a smoke run of the demo script inside a minimal DOM.
 
 ## Limits
 
@@ -480,6 +503,7 @@ Coverage: normalization and segmentation, Latin syllabification, number reading,
 - Output is mono 16-bit WAV; there is no real-time scheduling and no streaming. Everything renders synchronously — roughly 150× real time on a laptop, but blocking for long texts.
 - The buffer is allocated up front: ten minutes at 44.1 kHz is about 106 MB of `Float32Array`, and `maxDuration` defaults to 600 seconds.
 - Pinyin mode expects space-separated syllables. Hanzi mixed into a pinyin string is not an error, but each such character falls back to a hashed vowel and adds a warning.
+- Kana mode is a front end, not a Japanese reader: kanji inside kana text keep a hashed vowel, は / へ are read as written when they are particles, there is no pitch-accent dictionary, and halfwidth katakana (ﾊﾝｶｸ) falls back to one hashed blip per character.
 - Numbers longer than 12 digits are read digit by digit.
 - No TypeScript declarations are shipped yet.
 

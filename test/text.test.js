@@ -78,9 +78,11 @@ test('英文数字按 thousand/million 读', () => {
   assert.equal(en('3.5'), 'threepointfive');
 });
 
-test('表情符号、假名各算一声，ASCII 标点不发声', () => {
+test('表情符号各算一声，假名按モーラ计数，ASCII 标点不发声', () => {
   assert.equal(analyze('❤', {language: 'en'}).cues.length, 1);
-  assert.equal(analyze('こんにちは', {language: 'en'}).cues.length, 5);
+  const ja = analyze('こんにちは', {language: 'en'});
+  assert.equal(ja.cues.length, 5);
+  assert.deepEqual(ja.cues.map((c) => c.vowel), ['o', 'ə', 'i', 'i', 'a']);
   assert.equal(analyze('+&@#', {language: 'en'}).cues.length, 0);
 });
 
