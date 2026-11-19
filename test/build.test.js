@@ -29,7 +29,7 @@ test('演示页引用的 DOM id 都存在且不重复', () => {
 });
 
 /** 在最小 DOM 里跑一遍演示页脚本，返回被写入的节点。 */
-function runDemo(text) {
+function runDemo(text, overrides = {}) {
   const match = html.match(/<script type="module">([\s\S]*?)<\/script>/);
   assert.ok(match, 'index.html 里找不到内联 module');
   const code = match[1];
@@ -53,6 +53,7 @@ function runDemo(text) {
 
   const nodes = new Map();
   const initial = {
+    ...overrides,
     text,
     voice: 'bibi',
     mode: 'auto',
@@ -130,4 +131,13 @@ test('演示页能直接读假名', () => {
   assert.match(nodes.get('stats').innerHTML, /lang <b>ja<\/b>/);
   assert.match(nodes.get('cue-body').innerHTML, /こ/);
   assert.match(nodes.get('mouth-meta').textContent, /cues/);
+});
+
+test('演示页能按音名唱，cue 表里出现音名', () => {
+  const nodes = runDemo('あ[C4]い[D4]う[E4]', {'note-marks': 'auto'});
+
+  assert.match(nodes.get('stats').innerHTML, /<b>3<\/b> noted/);
+  assert.match(nodes.get('cue-body').innerHTML, /C4/);
+  assert.match(nodes.get('cue-body').innerHTML, /E4/);
+  assert.match(nodes.get('plan-json').textContent, /"register": 74/);
 });

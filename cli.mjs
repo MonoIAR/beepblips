@@ -23,6 +23,7 @@ const USAGE = `beepblips ${pkg.version} —— 把一句话变成「哔哔啵啵
       --tempo <数字>  每秒几个音节（默认取声线设置，约 6–8）
       --pitch <半音>  整体移调（默认 0）
       --mode <模式>   auto | text | pinyin（默认 auto）
+      --note-marks <开关>  off | auto：是否读文本里的音名，如 あ[C4]い[D4]（默认 off）
       --lang <语言>   auto | zh | en | ja（影响数字读法，默认 auto）
       --rate <Hz>     采样率（默认 44100）
       --seed <数字>   抖动/噪声种子（默认 0，同样的种子结果完全一致）
@@ -44,6 +45,7 @@ const OPTIONS = {
   tempo: {type: 'string'},
   pitch: {type: 'string'},
   mode: {type: 'string'},
+  'note-marks': {type: 'string'},
   lang: {type: 'string'},
   rate: {type: 'string'},
   seed: {type: 'string'},
@@ -93,6 +95,7 @@ const opts = {
   tempo: num(values.tempo, 'tempo', undefined),
   pitch: num(values.pitch, 'pitch', 0),
   mode: values.mode ?? 'auto',
+  noteMarks: values['note-marks'] ?? 'off',
   language: values.lang ?? 'auto',
   sampleRate: num(values.rate, 'rate', 44100),
   seed: num(values.seed, 'seed', 0),
@@ -113,10 +116,11 @@ if (values.json) {
 }
 
 if (values.cues) {
-  console.log('   #  起止(s)        文本      元音      音高');
+  console.log('   #  起止(s)        文本      元音      音名    音高');
   for (const cue of result.cues) {
     console.log(`${String(cue.i + 1).padStart(4)}  ${cue.t0.toFixed(2)}–${cue.t1.toFixed(2)}`
-      + `  ${cue.text.padEnd(8)} ${cue.vowel.padEnd(8)} ${(cue.midi ?? 0).toFixed(1)}`);
+      + `  ${cue.text.padEnd(8)} ${cue.vowel.padEnd(8)} ${(cue.note ?? '—').padEnd(6)}`
+      + ` ${(cue.midi ?? 0).toFixed(1)}`);
   }
   console.log('');
 }

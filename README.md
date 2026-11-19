@@ -6,7 +6,7 @@
 
 [中文 README](README.zh.md)
 
-beepblips (or `beepblips.js` if you prefer) turns a sentence into the "beep bleep" language in video games like Animal Crossing and Celeste. No recorded samples, no neural network: a sawtooth with three formant filters, every syllable gets one blip, and the punctuation decides whether the melody rises, falls, or trails off. The engine is ~53 KiB of plain JavaScript with no I/O, so the same file runs in Node, in the browser, and in the bundled demo page.
+beepblips (or `beepblips.js` if you prefer) turns a sentence into the "beep bleep" language in video games like Animal Crossing and Celeste. No recorded samples, no neural network: a sawtooth with three formant filters, every syllable gets one blip, and the punctuation decides whether the melody rises, falls, or trails off. The engine is ~58 KiB of plain JavaScript with no I/O, so the same file runs in Node, in the browser, and in the bundled demo page.
 
 ## Language it supports
 
@@ -126,6 +126,8 @@ That is the whole integration: `speak()` hands you a mono `Float32Array`; `toWav
 | `tempo` | voice's `tempo` (7) | syllables per second, clamped 1–30 | analyze |
 | `pitch` | `0` | transpose in semitones, any finite number | render |
 | `mode` | `'auto'` | `'auto'`, `'text'`, `'pinyin'` | analyze |
+| `noteMarks` | `'off'` | `'off'`, `'auto'` — read `[C4]` note names in the text | analyze |
+| `register` | `74` (bibi's) | 0–127 MIDI note; the register note names resolve against | analyze² |
 | `language` | `'auto'` | `'auto'`, `'zh'`, `'en'`, `'ja'` — affects number reading only | analyze |
 | `readNumbers` | `true` | boolean: words for numbers, or one blip per digit | analyze |
 | `readAcronyms` | `true` | boolean: read all-caps 2–5 letter words as letter names | analyze |
@@ -138,6 +140,8 @@ That is the whole integration: `speak()` hands you a mono `Float32Array`; `toWav
 | `cues` | `true` | include the cue list in the result | render |
 
 ¹ Only `speak()` reads the voice while planning: it folds the preset's `tempo` and intonation `contours` into the score, so switching voices can nudge the melody as well as the timbre. `analyze()` ignores `voice` entirely — pass `contours` explicitly if you want specific intonation there.
+
+² `speak()` always uses the voice's own `register`, so `C4` is 261.6 Hz in every preset. Set `register` yourself only when you call `analyze()` without a voice; overriding it in `speak()` offsets the plan from the rendering voice and therefore acts like a transpose.
 
 ### `speak(text, opts?) → {samples, sampleRate, duration, cues, plan}`
 
@@ -215,6 +219,7 @@ Field notes:
 - **`stress`**, **`terminal`**, **`finalSyl`**, and **`phraseId`** carry the prosody decisions: word stress, end of sentence, end of clause, and which sentence the syllable belongs to.
 - **`kindOf`** is `latin`, `pinyin`, `cjk`, `kana`, or `other`; an onset gesture is `none`, `stop`, `fric`, `nasal`, or `liquid` — as `event.onset.type` in the plan, and as the plain string `cue.onset`.
 - **`moras`** and **`nasalOnly`** only appear on kana events: how many beats the syllable holds (`コー` is 2) and whether it is a moraic nasal (`ん`), which the render keeps nasal for the whole beat.
+- **`notes`** appears only on syllables that carry a note mark: the absolute MIDI pitches the user wrote, while `pitch` holds the same values converted to register-relative semitones. **`register`** appears on the plan only when at least one note was pinned, and records the register that conversion used. See [Manual pitch](#manual-pitch).
 - **`cues`** is the animation view of the same data, and the render stage adds absolute `midi` to it.
 - **`warnings`** collects recoverable input problems (for example, a pinyin token that could not be parsed); **`truncated`** is `true` when `maxDuration` cut the text short.
 
@@ -247,6 +252,8 @@ The 32-bit FNV-1a hash the engine uses to give every character a stable sound. H
 | Unknown voice name | `TypeError` listing the available presets |
 | Voice field out of range or wrong type | `TypeError` naming the field, the range, and what it received |
 | `mode` other than `text` / `pinyin` | `TypeError` |
+| `noteMarks` other than `off` / `auto` | `TypeError` |
+| `register` outside 0–127 | `TypeError` |
 | `pitch` not a finite number | `TypeError` |
 | `sampleRate` outside 4000–384000 | `TypeError` |
 | `toWav` with `sampleRate <= 0` | `TypeError` |
@@ -433,6 +440,23 @@ speak('カフェで コーヒーを のみましょう。');       // katakana u
 - Once kana appears, `language` resolves to `'ja'` and numbers are read in Japanese (`2026` → にせんにじゅうろく, `300` → さんびゃく, `3.5` → さんてんご) before going through the same front end. A bare number still needs `{language: 'ja'}` because there is no kana to detect.
 - Kanji mixed into kana text still get one hashed blip per character. That is the same trade-off as Hanzi in pinyin mode.
 
+## Manual pitch
+
+Turn `noteMarks` on and the text can carry its own melody: a note name in square brackets sets the pitch of the character in front of it.
+
+```js
+speak('あ[C4]い[D4]う[E4]', {noteMarks: 'auto'});
+speak('ni3[C4] hao3[D4]', {noteMarks: 'auto'});   // pinyin takes marks at the end of a token
+```
+
+- `C4` is MIDI 60, and it is absolute: whichever voice you render with, that syllable sits at 261.6 Hz. The plan records it twice — `pitch` relative to the planning register, `notes` as absolute MIDI — so `render()` needs no special case, and cues gain a `note` label next to `midi`.
+- A pinned syllable ignores the tone contour, the declination, and the punctuation contour. You asked for C4, you get C4. Loudness and timing still follow the punctuation (`!` is louder, not higher).
+- The mark binds to the nearest audible character before it. `きゃ[C4]` is one syllable, `コー[C4]` pins the whole two-mora コ, and `がっ[C4]こう` lands on が because っ has no sound of its own. For a Latin word or a number the note goes to its first syllable: `hello[C4]`, `12[C4]`.
+- Write several marks in a row for a glide inside one syllable: `あ[C4][E4]` starts on C4 and arrives at E4.
+- Sharps and flats both work (`F#3`, `Bb5`), as do lowercase names and full-width brackets (`あ［c4］`).
+- `off` is the default, so `[C4]` in ordinary text keeps its old meaning: the brackets are dropped as decoration and `C4` is read out. With `auto`, a bracket that is not a note name is ignored as a mark and reported in `warnings`.
+- The label is only exact for the register it was planned against. `speak()` uses the voice's own register; render that plan later with a different voice and everything shifts by the difference between the two registers (bibi 74 → warm 57 is 17 semitones down).
+
 ## How it works
 
 ```
@@ -452,6 +476,7 @@ node cli.mjs "今天吃白饭？没饭了！" -o out.wav
 node cli.mjs --mode pinyin "ni3 hao3" --voice warm --reverb 0.25 --cues
 node cli.mjs "こんにちは、きょうも はれですね" -o ja.wav --cues
 node cli.mjs "hello, world" --voice robot --json
+node cli.mjs --note-marks auto "あ[C4]い[D4]う[E4]" -o melody.wav
 ```
 
 | Flag | Meaning |
@@ -461,6 +486,7 @@ node cli.mjs "hello, world" --voice robot --json
 | `--tempo <n>` | Syllables per second |
 | `--pitch <semitones>` | Transpose |
 | `--mode <mode>` | `auto`, `text`, `pinyin` |
+| `--note-marks <on>` | `off`, `auto` — read `[C4]` note names (default `off`) |
 | `--lang <lang>` | `auto`, `zh`, `en`, `ja` |
 | `--rate <Hz>` | Sample rate |
 | `--seed <n>` | Jitter and noise seed |
@@ -480,6 +506,7 @@ Double-click `index.html`. Type a sentence, pick a voice, hit **Blip!**, and sav
 
 - **Number language**, sample rate, seed (+ **Randomize**), pause scale, and max duration
 - **Read numbers aloud** and **Read acronyms as letters** toggles
+- **Note marks**: turn it on and the text may carry note names, `あ[C4]い[D4]う[E4]`; the cue sheet then shows a Note column
 - **Custom voice**: a dozen parameters applied live, with **Copy voice JSON** to take them into your code
 - **Download cues (CSV)**: every syllable's start, end, and mouth opening, ready for animation
 - A waveform scope and a per-syllable mouth-shape timeline
@@ -494,7 +521,7 @@ node build.mjs           # inline the engine into index.html
 node build.mjs --check   # verify the demo page is in sync (CI)
 ```
 
-Coverage: normalization and segmentation, Latin syllabification, number reading (English, Chinese, Japanese), pinyin parsing, kana mora parsing (sokuon, long vowels, yōon, moraic nasal, even rhythm), prosody contours, hash decorrelation, render finiteness / peak / DC offset, pitch accuracy of a hand-written plan, reverb tail, WAV header fields, build synchronization, demo-page DOM references, and a smoke run of the demo script inside a minimal DOM.
+Coverage: normalization and segmentation, Latin syllabification, number reading (English, Chinese, Japanese), pinyin parsing, kana mora parsing (sokuon, long vowels, yōon, moraic nasal, even rhythm), note marks (absolute pitch across voices, glides, attachment to kana, pinyin, words and numbers, invalid-name warnings), prosody contours, hash decorrelation, render finiteness / peak / DC offset, pitch accuracy of a hand-written plan, reverb tail, WAV header fields, build synchronization, demo-page DOM references, and a smoke run of the demo script inside a minimal DOM.
 
 ## Limits
 
@@ -504,6 +531,7 @@ Coverage: normalization and segmentation, Latin syllabification, number reading 
 - The buffer is allocated up front: ten minutes at 44.1 kHz is about 106 MB of `Float32Array`, and `maxDuration` defaults to 600 seconds.
 - Pinyin mode expects space-separated syllables. Hanzi mixed into a pinyin string is not an error, but each such character falls back to a hashed vowel and adds a warning.
 - Kana mode is a front end, not a Japanese reader: kanji inside kana text keep a hashed vowel, は / へ are read as written when they are particles, there is no pitch-accent dictionary, and halfwidth katakana (ﾊﾝｶｸ) falls back to one hashed blip per character.
+- Note marks pin pitch only. There is no syntax for note length, velocity, or per-syllable timbre, and a pinned note is still subject to the voice's vibrato and micro-jitter.
 - Numbers longer than 12 digits are read digit by digit.
 - No TypeScript declarations are shipped yet.
 

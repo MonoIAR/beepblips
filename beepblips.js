@@ -2,6 +2,7 @@
 // 一条锯齿波过三个共振峰、一个字一声、标点管语气、同字同声；
 // 再加上文本分析（分词/数字/音节/拼音）、连续音高与字间共音、
 // 辅音手势、可深度定制的声线、时间轴 cues、软限幅与可选混响。
+// 可选的手动音高：把音名写进文本（あ[C4]い[D4]），规划期换算成相对半音，渲染不用改。
 //
 // 流程：normalize → segment → tokenize → 读音展开 → 韵律（Plan）→ 单通道合成 → WAV。
 // 所有音色与韵律参数都是数据，改声线不用碰 DSP。
@@ -260,10 +261,14 @@ function isDigit(ch) {
   return ch >= '0' && ch <= '9';
 }
 
-/** 全角转半角、标点归并、保护词内连字符、去掉纯装饰符号。 */
-function normalize(text) {
+/** 全角转半角、标点归并、保护词内连字符、去掉纯装饰符号；noteMarks 打开时保留 [C4]。 */
+function normalize(text, noteMarks = false) {
   let s = String(text ?? '').normalize('NFC');
   s = s.replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  // 音名标记 [C4] 先藏成占位符，不然下面那句会把方括号连同音名一起当装饰符号清掉。
+  // 占位符里只有 \u0002 / \u0003 和数字，所有清理规则都碰不到它。
+  const held = [];
+  if (noteMarks) s = s.replace(/\[[^\]\n]{1,12}\]/g, (m) => `\u0002${held.push(m) - 1}\u0003`);
   s = s.replace(/\u3000/g, ' ').replace(/[\u200B-\u200D\uFEFF]/g, '');
   s = s.replace(/[。、]/g, (c) => (c === '。' ? '.' : ','));
   s = s.replace(/[“”]/g, '');
@@ -279,6 +284,8 @@ function normalize(text) {
   // 千分位：30,000 → 30000
   s = s.replace(/(\d),(?=\d{3}(?:\D|$))/g, '$1');
   s = s.replace(/[^\S\n]+/g, ' ').replace(/[ \t]*\n[ \t]*/g, '\n').replace(/\n{2,}/g, '\n');
+  // 还原成 [C4]，让 tokenize 认出它、也让 plan.text 保持可读可回填
+  if (held.length) s = s.replace(/\u0002(\d+)\u0003/g, (_, i) => held[Number(i)]);
   return s.trim();
 }
 
@@ -373,17 +380,18 @@ function detectLanguage(src) {
 
 // ─────────────────────────── 4. 分词与读音展开 ───────────────────────────
 
-const TOKEN_RE = /([A-Za-z]+(?:['\-][A-Za-z]+)*)|(\d+(?:\.\d+)?)|([\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF])|([\u3041-\u309F\u30A1-\u30FF]+)|([\s\S])/gu;
+const TOKEN_RE = /(\[[^\]\n]{1,12}\])|([A-Za-z]+(?:['\-][A-Za-z]+)*)|(\d+(?:\.\d+)?)|([\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF])|([\u3041-\u309F\u30A1-\u30FF]+)|([\s\S])/gu;
 
-/** 汉字 / 假名串 / 拉丁词 / 数字 / 其他（韩文、西里尔、表情符号……）。 */
+/** 汉字 / 假名串 / 拉丁词 / 数字 / 音名标记 / 其他（韩文、西里尔、表情符号……）。 */
 function tokenize(text) {
   const out = [];
   for (const m of text.matchAll(TOKEN_RE)) {
-    if (m[1] !== undefined) out.push({type: 'word', text: m[1]});
-    else if (m[2] !== undefined) out.push({type: 'number', text: m[2]});
-    else if (m[3] !== undefined) out.push({type: 'cjk', text: m[3]});
-    else if (m[4] !== undefined) out.push({type: 'kana', text: m[4]});
-    else if (m[5] !== undefined && !/\s/u.test(m[5])) out.push({type: 'other', text: m[5]});
+    if (m[1] !== undefined) out.push({type: 'note', text: m[1]});
+    else if (m[2] !== undefined) out.push({type: 'word', text: m[2]});
+    else if (m[3] !== undefined) out.push({type: 'number', text: m[3]});
+    else if (m[4] !== undefined) out.push({type: 'cjk', text: m[4]});
+    else if (m[5] !== undefined) out.push({type: 'kana', text: m[5]});
+    else if (m[6] !== undefined && !/\s/u.test(m[6])) out.push({type: 'other', text: m[6]});
   }
   return out;
 }
@@ -833,7 +841,8 @@ function pinyinSyllable(raw) {
 }
 
 function looksLikePinyin(src) {
-  const tokens = src.replace(/[,;:.!?…]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  // 音名标记不参与判定，否则 ni3[C4] hao3[D4] 永远识别不出来
+  const tokens = src.replace(/\[[^\]\n]{1,12}\]/g, ' ').replace(/[,;:.!?…]/g, ' ').trim().split(/\s+/).filter(Boolean);
   if (!tokens.length || tokens.length > 200) return false;
   let toned = false;
   for (const tok of tokens) {
@@ -951,6 +960,42 @@ function kanaSyllables(text) {
   return out;
 }
 
+// —— 音名标记 ——
+// 写成 あ[C4] 就是「这个字唱 C4」。C4 = MIDI 60，规划期按 register 换算成相对半音，
+// 所以 render 一行都不用改；标记紧跟在前一个有声字符后面，连写多个就是音节内的滑音：
+// あ[C4][E4] 从 C4 滑到 E4。
+
+const NOTE_RE = /^([a-g])([#♯b♭]?)(-?\d{1,2})$/;
+const NOTE_STEP = {c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11};
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+/** "C4" / "F#3" / "Bb5" → MIDI 音高；认不出来返回 null。 */
+function parseNote(raw) {
+  const m = NOTE_RE.exec(String(raw).trim().toLowerCase());
+  if (!m) return null;
+  const accidental = m[2] === '#' || m[2] === '♯' ? 1 : m[2] ? -1 : 0;
+  const midi = (Number(m[3]) + 1) * 12 + NOTE_STEP[m[1]] + accidental;
+  return midi >= 0 && midi <= 127 ? midi : null;
+}
+
+/** MIDI 音高 → "C4"，给 cues 和演示页显示用。 */
+function noteName(midi) {
+  const n = Math.round(Number(midi));
+  if (!isNum(n) || n < 0 || n > 127) return null;
+  return `${NOTE_NAMES[n % 12]}${Math.floor(n / 12) - 1}`;
+}
+
+/** 只由音名标记组成的串（" [C4][E4]" → 两个音高，认不出来的忽略并记 warning）。 */
+function notesOf(raw, sf) {
+  const out = [];
+  for (const m of String(raw).matchAll(/\[([^\]\n]{1,12})\]/g)) {
+    const midi = parseNote(m[1]);
+    if (midi === null) sf.warnings.push(`音名无法解析「[${m[1]}]」`);
+    else out.push(midi);
+  }
+  return out;
+}
+
 // ─────────────────────────── 6. 音节与韵律 ───────────────────────────
 
 /** 汉字/表情符号等：哈希决定元音、辅音、声调、抖动四个互相独立的维度。 */
@@ -1006,11 +1051,24 @@ function wordSyllables(word, sf) {
 
 function textSyllables(text, sf) {
   const out = [];
+  // 上一个出声的 token 产出的音节：音名标记钉在它的第一个音节上。
+  // 促音（っ）和长音（ー）自己不产生音节，所以标记会落到前面最近的那个有声字符上。
+  let last = null;
   for (const tok of tokenize(text)) {
+    if (tok.type === 'note') {
+      const notes = notesOf(tok.text, sf);
+      if (!notes.length) continue;
+      if (last) last[0].notes = [...(last[0].notes ?? []), ...notes];
+      else sf.warnings.push(`音名标记「${tok.text}」前面没有可发声的字符`);
+      continue;
+    }
     let list = [];
     if (tok.type === 'number' && sf.readNumbers) {
-      // 数字先读成词，再递归切音节；每个词自己编号
-      out.push(...textSyllables(spellNumber(tok.text, sf.language), sf));
+      // 数字先读成词，再递归切音节；每个词自己编号。
+      // 注意别改写成 list = ...：那会把整串数字并成一个 wordId，字间停顿会跟着变。
+      const words = textSyllables(spellNumber(tok.text, sf.language), sf);
+      if (words.length) last = words.filter((syl) => !syl.pause);
+      out.push(...words);
       continue;
     }
     if (tok.type === 'word') list = wordSyllables(tok.text, sf);
@@ -1020,6 +1078,8 @@ function textSyllables(text, sf) {
     else if (tok.type === 'cjk') list = [hashSyllable(tok.text, 'cjk')];
     else if (speakable(tok.text)) list = [hashSyllable(tok.text, 'other')];
     if (!list.length) continue;
+    const sounding = list.filter((syl) => !syl.pause);
+    if (sounding.length) last = sounding;
     const wordId = sf.word++;
     for (const syl of list) {
       syl.wordId = wordId;
@@ -1031,15 +1091,27 @@ function textSyllables(text, sf) {
 
 function pinyinClause(text, sf) {
   const out = [];
-  for (const tok of text.trim().split(/\s+/)) {
-    if (!tok) continue;
+  for (const raw of text.trim().split(/\s+/)) {
+    if (!raw) continue;
+    // 音名标记可以贴在拼音词尾：ni3[C4]。先切下来，否则整词解析失败。
+    const m = sf.noteMarks ? /^(.*?)((?:\[[^\]\n]{1,12}\])+)$/.exec(raw) : null;
+    if (m && !m[1]) {
+      // 整个词只有标记（例如标记前多打了个空格），没有音节可钉
+      notesOf(m[2], sf);
+      sf.warnings.push(`音名标记「${raw}」前面没有可发声的字符`);
+      continue;
+    }
+    const tok = m ? m[1] : raw;
+    const notes = m ? notesOf(m[2], sf) : [];
     const syl = pinyinSyllable(tok);
     if (syl) {
+      if (notes.length) syl.notes = notes;
       syl.wordId = sf.word++;
       out.push(syl);
     } else {
       sf.warnings.push(`拼音无法解析「${tok}」，按普通文本处理`);
-      out.push(...textSyllables(tok, sf));
+      // raw 里还带着音名，交给文本前端自己挂到音节上
+      out.push(...textSyllables(raw, sf));
     }
   }
   return out;
@@ -1071,8 +1143,11 @@ function buildPlan(sentences, src, sf, opts) {
   const pauseScale = clamp(opts.pauseScale ?? 1, 0.2, 3);
   const maxDuration = opts.maxDuration ?? 600;
   const c = {...DEFAULT_CONTOURS, ...(opts.contours ?? {})};
+  // 音名是按这个 register 换算成相对半音的；speak() 会填成声线自己的 register
+  const register = isNum(opts.register) ? opts.register : VOICES.bibi.register;
   const events = [];
   const cues = [];
+  let notesUsed = false;
   let t = 0.06;
   let truncated = false;
 
@@ -1110,7 +1185,11 @@ function buildPlan(sentences, src, sf, opts) {
         const shape = syl.tone !== null && syl.tone !== undefined ? TONE_SHAPES[syl.tone] ?? [0, 0] : [0, 0];
         const termKind = sentenceLast ? sentence.kind : clauseLast ? 'comma' : null;
         const decl = lerp(c.decline[0], c.decline[1], pos);
-        const pitch = shape.map((v, i) => {
+        // 手动音高：写了音名就整段替换——声调轮廓、句尾起伏都不再叠加，
+        // 用户写了 C4 就该听到 C4。没写音名的音节照旧算语调。
+        const manual = syl.notes?.length ? syl.notes.map((midi) => midi - register) : null;
+        if (manual) notesUsed = true;
+        const pitch = manual ?? shape.map((v, i) => {
           const p = shape.length === 1 ? 0 : i / (shape.length - 1);
           return v * (syl.toneScale ?? 1) + decl + accent + (termKind ? terminalAt(termKind, p, c) : 0);
         });
@@ -1134,6 +1213,7 @@ function buildPlan(sentences, src, sf, opts) {
           tone: syl.tone,
           jitter: syl.jitter,
           kindOf: syl.kind,
+          ...(manual ? {notes: syl.notes.slice()} : {}),
           ...(syl.kind === 'kana' ? {moras: syl.moras, nasalOnly: syl.nasalOnly} : {}),
           phraseId: si,
           terminal: sentenceLast,
@@ -1145,6 +1225,7 @@ function buildPlan(sentences, src, sf, opts) {
           t0: t,
           t1: t + dur,
           pitch: pitch[0],
+          ...(manual ? {note: noteName(syl.notes[0])} : {}),
           vowel: syl.vowels[0],
           onset: syl.onset.type,
           stress: syl.stress ? 1 : 0,
@@ -1182,6 +1263,7 @@ function buildPlan(sentences, src, sf, opts) {
     mode: sf.mode,
     language: sf.language,
     tempo,
+    ...(notesUsed ? {register} : {}),
     events,
     cues,
     duration: t,
@@ -1193,17 +1275,25 @@ function buildPlan(sentences, src, sf, opts) {
 /**
  * 分析文本，得到一份与音色无关的「乐谱」。
  * @param {string} text
- * @param {object} [opts] tempo / mode / language / readNumbers / readAcronyms /
- *   pauseScale / maxDuration / contours
+ * @param {object} [opts] tempo / mode / noteMarks / register / language / readNumbers /
+ *   readAcronyms / pauseScale / maxDuration / contours
  */
 export function analyze(text, opts = {}) {
-  const src = normalize(text);
+  const noteMarks = opts.noteMarks ?? 'off';
+  if (noteMarks !== 'off' && noteMarks !== 'auto') {
+    throw new TypeError(`noteMarks 只能是 'off' 或 'auto'，收到 "${noteMarks}"`);
+  }
+  if (opts.register !== undefined && (!isNum(opts.register) || opts.register < 0 || opts.register > 127)) {
+    throw new TypeError(`register 必须是 0..127 的 MIDI 音高，收到 ${opts.register}`);
+  }
+  const src = normalize(text, noteMarks === 'auto');
   const language = opts.language && opts.language !== 'auto' ? opts.language : detectLanguage(src);
   const mode = opts.mode && opts.mode !== 'auto' ? opts.mode : (looksLikePinyin(src) ? 'pinyin' : 'text');
   if (mode !== 'text' && mode !== 'pinyin') throw new TypeError(`mode 只能是 'text' 或 'pinyin'，收到 "${mode}"`);
   const sf = {
     mode,
     language,
+    noteMarks: noteMarks === 'auto',
     readNumbers: opts.readNumbers !== false,
     readAcronyms: opts.readAcronyms !== false,
     warnings: [],
@@ -1542,6 +1632,8 @@ export function speak(text, opts = {}) {
   const voice = resolveVoice(opts.voice);
   const plan = analyze(text, {
     ...opts,
+    // 音名按这条声线的音域换算：C4 在 bibi、warm 上都发 261.6 Hz
+    register: opts.register ?? voice.register,
     tempo: opts.tempo ?? voice.tempo,
     contours: {...voice.contours, ...(opts.contours ?? {})},
   });

@@ -6,7 +6,7 @@
 
 [English README](README.md)
 
-beepblips 把一句话变成动森、蔚蓝里那种“哔哔啵啵”的说话声。没有录音采样，也没有神经网络：一条锯齿波过三个共振峰滤波器，每个音节发一声，标点决定旋律上扬、下落还是拖长。引擎是约 53 KiB 的纯 JavaScript，不做任何 I/O，同一份文件能跑在 Node、浏览器和自带的演示页里。
+beepblips 把一句话变成动森、蔚蓝里那种“哔哔啵啵”的说话声。没有录音采样，也没有神经网络：一条锯齿波过三个共振峰滤波器，每个音节发一声，标点决定旋律上扬、下落还是拖长。引擎是约 58 KiB 的纯 JavaScript，不做任何 I/O，同一份文件能跑在 Node、浏览器和自带的演示页里。
 
 ## 支持的语言
 
@@ -98,7 +98,24 @@ source.start();
 | `hash(text)` | FNV-1a 32 位哈希，字音映射的来源 |
 | `VOICES`, `VOWELS` | 冻结的预设声线与共振峰表 |
 
-常用选项：`voice`（默认 `bibi`）、`tempo`、`pitch`、`mode`、`language`、`reverb`、`sampleRate`、`seed`、`maxDuration`、`cues`。完整选项表、Plan 结构、错误行为和用法示例见[英文 README 的 API reference](README.md#api-reference)。
+常用选项：`voice`（默认 `bibi`）、`tempo`、`pitch`、`mode`、`noteMarks`、`register`、`language`、`reverb`、`sampleRate`、`seed`、`maxDuration`、`cues`。完整选项表、Plan 结构、错误行为和用法示例见[英文 README 的 API reference](README.md#api-reference)。
+
+## 手动音高
+
+打开 `noteMarks: 'auto'`，文本里就能直接写旋律——方括号里的音名决定它前面那个字的音高：
+
+```js
+speak('あ[C4]い[D4]う[E4]', {noteMarks: 'auto'});
+speak('ni3[C4] hao3[D4]', {noteMarks: 'auto'});   // 拼音词尾也认
+```
+
+- `C4` 是绝对的：换哪条声线，这个音节都是 261.6 Hz。Plan 里同时记了相对半音（`pitch`）和绝对 MIDI（`notes`），所以 `render()` 不用改，cue 上多一个 `note` 字段。
+- 写了音名的音节不再叠加声调轮廓、declination 和句尾语调——你写 C4 就听到 C4；标点仍然只管音量和时长（`!` 是更响，不是更高）。
+- 标记贴在**它前面最近的有声字符**上：`きゃ[C4]` 一拍，`コー[C4]` 钉住两拍的 コ，`がっ[C4]こう` 落在 が 上（っ 不发声）。拉丁词和数字取第一个音节：`hello[C4]`、`12[C4]`。
+- 连写多个音名就是音节内的滑音：`あ[C4][E4]` 从 C4 滑到 E4。
+- `#` / `b`、小写、全角方括号都认（`F#3`、`Bb5`、`あ［c4］`）。
+- 默认是 `'off'`：普通文本里的 `[C4]` 保持原来的行为（方括号当装饰去掉、`C4` 照读）；打开 `auto` 后，方括号里认不出的内容会被当成无效标记忽略并记一条 warning。
+- 音名只对规划时用的 register 精确。`speak()` 用声线自己的 register；换声线渲染同一份 plan 会按 register 差整体平移（bibi 74 → warm 57 是低 17 个半音）。
 
 ## 内置声线
 
@@ -126,6 +143,7 @@ node cli.mjs "hello, world" --voice robot --json
 | `--voice <名字>` | `bibi`、`warm`、`robot`、`squeak` |
 | `--tempo <数字>` / `--pitch <半音>` | 语速 / 移调 |
 | `--mode <模式>` | `auto`、`text`、`pinyin` |
+| `--note-marks <开关>` | `off`、`auto`：是否读文本里的音名，如 `あ[C4]`（默认 `off`） |
 | `--lang <语言>` | `auto`、`zh`、`en`、`ja` |
 | `--rate <Hz>` / `--seed <数字>` / `--reverb <0..1>` | 采样率 / 随机种子 / 混响 |
 | `--cues` / `--json` | 打印音节时间轴 / 乐谱 JSON |
@@ -139,6 +157,7 @@ node cli.mjs "hello, world" --voice robot --json
 
 - 数字读法语言、采样率、随机种子、停顿缩放和最大时长
 - 「数字读成词」「缩写按字母读」开关
+- 「Note marks」开关：打开后文本里可以写 `あ[C4]い[D4]う[E4]`，cue 表会多一列音名
 - 自定义声线：十几个参数实时生效，可复制 voice JSON
 - 导出 cues CSV：每个音节的起止时间和开口度，可直接拿去做动画
 - 波形显示和逐音节口型时间轴
@@ -161,6 +180,7 @@ node build.mjs --check   # 检查演示页是否与引擎同步（CI 用）
 - 缓冲区一次性分配：44.1 kHz 下十分钟约 106 MB，`maxDuration` 默认 600 秒。
 - 拼音模式要求音节之间用空格分开；拼音串里混入汉字不会报错，但每个汉字会退回哈希元音并记一条 warning。
 - 假名只做前端，不是日语朗读器：假名串里的汉字仍按哈希，助词 は / へ 按字面读，没有音高重音词典，半角片假名会退成一字一声。
+- 音名只钉音高：没有时长、力度、逐音节音色的语法，而且钉住的音仍会带声线的颤音和微抖动。
 - 超过 12 位的数字会逐位读。
 - 暂不提供 TypeScript 类型声明。
 
