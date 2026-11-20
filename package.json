@@ -15,6 +15,7 @@
     "access": "public"
   },
   "type": "module",
+  "sideEffects": false,
   "main": "./beepblips.js",
   "exports": {
     ".": "./beepblips.js"
@@ -36,14 +37,19 @@
   "scripts": {
     "test": "node --test",
     "build": "node build.mjs",
-    "check": "node build.mjs --check"
+    "check": "node build.mjs --check",
+    "prepublishOnly": "npm test && node build.mjs --check"
   },
   "keywords": [
     "speech",
     "synthesis",
+    "speech-synthesis",
+    "tts",
     "formant",
     "bleep",
-    "wav"
+    "wav",
+    "audio",
+    "web-audio"
   ],
   "license": "MIT"
 }

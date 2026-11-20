@@ -1,0 +1,68 @@
+name: Bug report
+description: Something beeps wrong, or stays silent when it should not.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If the problem only shows up on the demo page, run
+        `node build.mjs --check` first — an `index.html` that drifted from
+        `beepblips.js` is the most common cause of "works in Node, breaks in the
+        browser".
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: >-
+        The input text and options, plus a code snippet or the exact demo-page
+        steps. The shortest reproduction wins.
+      render: js
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did it happen?
+      multiple: true
+      options:
+        - Demo page (index.html)
+        - Library import in Node
+        - Library import in the browser
+        - CLI (cli.mjs)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: npm version, commit hash, or "main".
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Node or browser version
+      placeholder: "Node 24.4.0 / Chrome 141"
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Plan JSON or WAV (optional)
+      description: >-
+        `node cli.mjs "..." --json` output or a short WAV makes audio problems
+        much easier to pin down. Attach files after the issue is created.
+      render: json

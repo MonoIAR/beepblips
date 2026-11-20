@@ -1,0 +1,39 @@
+name: Feature request
+description: A voice, an option, a language front end, or a smaller thing.
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        beepblips deliberately stays one dependency-free file, so proposals that
+        keep the engine pure and the option surface small are the easiest to
+        accept.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The use case, not necessarily the API you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would it look like?
+      description: Options, plan fields, CLI flags, or a code snippet.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Workarounds you tried, or how other libraries solve this.
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: This can be done without adding a runtime dependency.
+        - label: I can try it on the demo page.

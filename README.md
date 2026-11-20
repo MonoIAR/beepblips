@@ -3,10 +3,15 @@
 **Bleep synthesizer in one file**
 
 [![CI](https://github.com/MonoIAR/beepblips/actions/workflows/ci.yml/badge.svg)](https://github.com/MonoIAR/beepblips/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/%40monoiar%2Fbeepblips)](https://www.npmjs.com/package/@monoiar/beepblips)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://monoiar.github.io/beepblips/)
 
-[中文 README](README.zh.md)
+[中文 README](https://github.com/MonoIAR/beepblips/blob/main/docs/README.zh.md)
 
 beepblips (or `beepblips.js` if you prefer) turns a sentence into the "beep bleep" language in video games like Animal Crossing and Celeste. No recorded samples, no neural network: a sawtooth with three formant filters, every syllable gets one blip, and the punctuation decides whether the melody rises, falls, or trails off. The engine is ~58 KiB of plain JavaScript with no I/O, so the same file runs in Node, in the browser, and in the bundled demo page.
+
+![beepblips in the browser](https://raw.githubusercontent.com/MonoIAR/beepblips/main/docs/demo.png)
 
 ## Language it supports
 
@@ -22,7 +27,7 @@ beepblips (or `beepblips.js` if you prefer) turns a sentence into the "beep blee
 | --- | --- |
 | Use it as a library | [Install](#install) → [Quick start](#quick-start) → [API](#api-reference) |
 | Generate a WAV without writing code | [CLI](#cli) |
-| Try it out | [Demo page](#demo-page) — double-click `index.html` |
+| Try it out | [Live demo](https://monoiar.github.io/beepblips/) — or double-click `index.html` |
 
 ## Install
 
@@ -516,7 +521,7 @@ The page inlines the engine, so after editing `beepblips.js` run `node build.mjs
 ## Tests and build
 
 ```bash
-npm test                 # node --test, 54 cases, no dependencies
+npm test                 # node --test, the full suite, no dependencies
 node build.mjs           # inline the engine into index.html
 node build.mjs --check   # verify the demo page is in sync (CI)
 ```
@@ -534,6 +539,12 @@ Coverage: normalization and segmentation, Latin syllabification, number reading 
 - Note marks pin pitch only. There is no syntax for note length, velocity, or per-syllable timbre, and a pinned note is still subject to the voice's vibrato and micro-jitter.
 - Numbers longer than 12 digits are read digit by digit.
 - No TypeScript declarations are shipped yet.
+
+## Contributing
+
+Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md)
+covers the dev loop and house style; report security issues privately as
+described in [SECURITY.md](SECURITY.md).
 
 ## License
 

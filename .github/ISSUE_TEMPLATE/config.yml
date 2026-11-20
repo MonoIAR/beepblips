@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Live demo
+    url: https://monoiar.github.io/beepblips/
+    about: Try the current build before filing a bug.
+  - name: Usage, API and CLI reference
+    url: https://github.com/MonoIAR/beepblips#readme
+    about: Most "how do I..." questions are answered in the README.

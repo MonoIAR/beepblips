@@ -3,10 +3,15 @@
 **单文件“哔哔语”合成器**
 
 [![CI](https://github.com/MonoIAR/beepblips/actions/workflows/ci.yml/badge.svg)](https://github.com/MonoIAR/beepblips/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/%40monoiar%2Fbeepblips)](https://www.npmjs.com/package/@monoiar/beepblips)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](../LICENSE)
+[![Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://monoiar.github.io/beepblips/)
 
-[English README](README.md)
+[English README](../README.md)
 
 beepblips 把一句话变成动森、蔚蓝里那种“哔哔啵啵”的说话声。没有录音采样，也没有神经网络：一条锯齿波过三个共振峰滤波器，每个音节发一声，标点决定旋律上扬、下落还是拖长。引擎是约 58 KiB 的纯 JavaScript，不做任何 I/O，同一份文件能跑在 Node、浏览器和自带的演示页里。
+
+![beepblips 演示页](https://raw.githubusercontent.com/MonoIAR/beepblips/main/docs/demo.png)
 
 ## 支持的语言
 
@@ -98,7 +103,7 @@ source.start();
 | `hash(text)` | FNV-1a 32 位哈希，字音映射的来源 |
 | `VOICES`, `VOWELS` | 冻结的预设声线与共振峰表 |
 
-常用选项：`voice`（默认 `bibi`）、`tempo`、`pitch`、`mode`、`noteMarks`、`register`、`language`、`reverb`、`sampleRate`、`seed`、`maxDuration`、`cues`。完整选项表、Plan 结构、错误行为和用法示例见[英文 README 的 API reference](README.md#api-reference)。
+常用选项：`voice`（默认 `bibi`）、`tempo`、`pitch`、`mode`、`noteMarks`、`register`、`language`、`reverb`、`sampleRate`、`seed`、`maxDuration`、`cues`。完整选项表、Plan 结构、错误行为和用法示例见[英文 README 的 API reference](../README.md#api-reference)。
 
 ## 手动音高
 
@@ -167,7 +172,7 @@ node cli.mjs "hello, world" --voice robot --json
 ## 测试与构建
 
 ```bash
-npm test                 # node --test，54 个用例，零依赖
+npm test                 # node --test，跑完整套用例，零依赖
 node build.mjs           # 把引擎内联进 index.html
 node build.mjs --check   # 检查演示页是否与引擎同步（CI 用）
 ```
@@ -183,6 +188,10 @@ node build.mjs --check   # 检查演示页是否与引擎同步（CI 用）
 - 音名只钉音高：没有时长、力度、逐音节音色的语法，而且钉住的音仍会带声线的颤音和微抖动。
 - 超过 12 位的数字会逐位读。
 - 暂不提供 TypeScript 类型声明。
+
+## 参与贡献
+
+欢迎提 issue 和 PR：开发流程和代码风格见 [CONTRIBUTING.md](CONTRIBUTING.md)；安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
 
 ## 许可证
 
