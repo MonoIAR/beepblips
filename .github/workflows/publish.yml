@@ -10,6 +10,9 @@ name: Publish to npm
 on:
   release:
     types: [published]
+  # Manual re-run for a release whose publish failed; the version check below
+  # makes it a no-op when the version is already on npm.
+  workflow_dispatch:
 
 permissions:
   contents: read
