@@ -66,7 +66,8 @@ Releases are tag-driven and published from CI:
 3. Push the commit and the tag, then publish a GitHub release for it.
 4. Publishing the release triggers `.github/workflows/publish.yml`, which tests,
    verifies that `index.html` is in sync, and runs `npm publish --provenance`
-   through npm Trusted Publishing.
+   through npm Trusted Publishing. Releases cut from tags older than that
+   workflow need a manual run from the Actions tab.
 
 ## Security
 

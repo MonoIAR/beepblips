@@ -7,6 +7,9 @@ name: Publish to npm
 # One-time setup on npmjs.com, package settings → Trusted Publisher → GitHub
 # Actions: repository MonoIAR/beepblips, workflow file publish.yml, environment
 # left blank. Until that trust exists, the Publish step is rejected by npm.
+#
+# A release whose tag predates this file (v0.1.0, v0.2.0) cannot trigger the
+# workflow; run it by hand from the Actions tab for those.
 on:
   release:
     types: [published]
